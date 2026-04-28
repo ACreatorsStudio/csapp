@@ -113,13 +113,21 @@ export default function App() {
   useEffect(function() {
     supabase.auth.getSession().then(function(res) {
       var session = res.data.session;
-      setUser(session ? session.user : null);
+      var u = session ? session.user : null;
+      setUser(u);
       setAuthLoading(false);
-      if (session && session.user) loadUserData(session.user.id);
+      if (u) {
+        // Load data first — if they have a pack, go to app. Otherwise stay on onboarding.
+        loadUserData(u.id);
+      }
     });
-    var sub = supabase.auth.onAuthStateChange(function(_e, session) {
-      setUser(session ? session.user : null);
-      if (session && session.user) loadUserData(session.user.id);
+    var sub = supabase.auth.onAuthStateChange(function(event, session) {
+      var u = session ? session.user : null;
+      setUser(u);
+      // SIGNED_IN fires after Google OAuth redirect
+      if (event === "SIGNED_IN" && u) {
+        loadUserData(u.id);
+      }
     });
     return function() { sub.data.subscription.unsubscribe(); };
   }, []);
@@ -129,9 +137,15 @@ export default function App() {
       var res = await fetch("/api/user/load", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId:userId }) });
       var json = await res.json();
       var d = json.data;
-      if (!d) return;
+      if (!d) {
+        // New user via Google — no data yet, stay on onboarding
+        setScreen("onboarding");
+        setAuthLoading(false);
+        return;
+      }
       if (d.profile) setProfile(d.profile);
       if (d.pack) { setPack(d.pack); setScreen("app"); }
+      else { setScreen("onboarding"); } // has account but no strategy yet
       if (d.month_plans) setMonthPlans(d.month_plans);
       if (d.ideas) setIdeas(d.ideas);
       if (d.picked) setPicked(d.picked);
@@ -142,7 +156,11 @@ export default function App() {
       if (d.saved_chats) setSavedChats(d.saved_chats);
       if (d.gens) setGens(d.gens);
       if (d.is_pro) setIsPro(d.is_pro);
-    } catch(e) {}
+      setAuthLoading(false);
+    } catch(e) {
+      setScreen("onboarding");
+      setAuthLoading(false);
+    }
   }
 
   async function saveUserData(updates) {
@@ -557,8 +575,21 @@ export default function App() {
                   );
                 })}
               </div>
-              <div style={{ fontSize:13, color:BRAND.muted }}>Active: <strong>{currentActive.join(", ")}</strong></div>
-              <button style={{ ...smBtn(true), marginTop:12 }} onClick={function(){ setScreen("upgrade"); }}>Upgrade for all platforms</button>
+              <div style={{ fontSize:13, color:BRAND.muted, marginBottom:12 }}>Active: <strong>{currentActive.join(", ")}</strong></div>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {currentActive.length === 3 && (
+                  <button style={{ ...rainbowBtn, padding:"10px 24px", fontSize:13 }} onClick={function(){
+                    var np = Object.assign({}, profile, { activePlatforms:currentActive });
+                    setProfile(np); saveUserData({ profile:np });
+                    // Dismiss warning by ensuring activePlatforms is saved
+                    alert("Platforms confirmed! You are all set.");
+                  }}>Confirm Selection and Continue</button>
+                )}
+                <button style={{ ...smBtn(false) }} onClick={function(){ setScreen("upgrade"); }}>Upgrade for all platforms</button>
+              </div>
+              {currentActive.length < 3 && (
+                <div style={{ fontSize:12, color:"#f4845f", marginTop:8 }}>Please select {3 - currentActive.length} more platform{3 - currentActive.length > 1 ? "s" : ""} to continue</div>
+              )}
             </div>
           )}
           <div style={{ ...cardStyle, background:BRAND.black, color:BRAND.white, borderColor:BRAND.black }}>
