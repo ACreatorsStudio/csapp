@@ -1,25 +1,19 @@
-import { createClient } from "@supabase/supabase-js";
-
 export const runtime = "nodejs";
 
 export async function POST(request) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
     const body = await request.json();
-    const { userId, data } = body;
-    if (!userId) {
-      return Response.json({ error: "No userId" }, { status: 400 });
-    }
-    const { error } = await supabase
-      .from("profiles")
-      .upsert({ id: userId, ...data }, { onConflict: "id" });
-    if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
-    }
-    return Response.json({ ok: true });
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    return Response.json(data);
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
