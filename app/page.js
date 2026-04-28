@@ -611,14 +611,76 @@ export default function App() {
     return (
       <div style={S.card}>
         <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:BRAND.muted,marginBottom:18}}>Content Ideas</div>
-        {pack?.pillars?.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:18,padding:14,background:"#f9f9f9",border:`1px solid ${BRAND.border}`}}><span style={{fontSize:11,fontWeight:700,letterSpacing:1,color:BRAND.muted,textTransform:"uppercase",alignSelf:"center",marginRight:4}}>Pillars:</span>{pack.pillars.map((p,i)=><span key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",background:PILLAR_COLORS[i]+"20",border:`1.5px solid ${PILLAR_COLORS[i]}`,fontSize:12,fontWeight:700,color:PILLAR_COLORS[i]}}><span style={{width:8,height:8,borderRadius:"50%",background:PILLAR_COLORS[i],display:"inline-block"}}/>{p.emoji} {p.name}</span>)}</div>}
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:18}}><span style={{fontSize:13,color:BRAND.muted}}>Generate</span>{[5,10,15,20,30].map(n=><button key={n} style={S.smBtn(n===ideaCount)} onClick={()=>setIdeaCount(n)}>{n}</button>)}<span style={{fontSize:13,color:BRAND.muted}}>ideas</span></div>
-        <button style={S.rainbowBtn} onClick={genIdeas}>{loading==="ideas"?"Generating...":"Generate Ideas"}</button>
-        {ideas.length>0&&<div style={{marginTop:22}}>{ideas.map((idea,i)=>{const pc=pillarColor(idea.pillar);const isPicked=!!picked.find(p=>p.title===idea.title);return(<div key={i} style={{display:"flex",alignItems:"stretch",marginBottom:8,border:`1px solid ${BRAND.border}`,overflow:"hidden",background:isPicked?"#f9f9f9":BRAND.white}}><div style={{width:6,background:pc,flexShrink:0}}/><div style={{flex:1,padding:"12px 14px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div style={{flex:1,paddingRight:12}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}><span style={{fontSize:11,fontWeight:700,padding:"2px 10px",background:pc+"20",color:pc,border:`1px solid ${pc}`,letterSpacing:0.3}}>{pack?.pillars?.find(p=>p.name===idea.pillar)?.emoji} {idea.pillar}</span><span style={{fontSize:11,color:BRAND.muted,letterSpacing:0.3,textTransform:"uppercase"}}>{idea.platform} · {idea.format}</span></div><div style={{fontWeight:700,fontSize:14,marginBottom:3}}>{idea.title}</div><div style={{fontSize:13,color:BRAND.muted,fontStyle:"italic"}}>"{idea.hook}"</div></div><button style={S.smBtn(isPicked)} onClick={()=>{const has=picked.find(p=>p.title===idea.title);const u=has?picked.filter(p=>p.title!==idea.title):[...picked,idea];setPicked(u);saveUserData({picked:u});}}>{isPicked?"✓ Picked":"Pick"}</button></div></div></div>);}){picked.length>0&&<button style={{...S.bigBtn(),marginTop:12}} onClick={()=>setNav(4)}>View Picked ({picked.length}) →</button>}</div>}
+
+        {pack?.pillars?.length>0 && (
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:18,padding:14,background:"#f9f9f9",border:`1px solid ${BRAND.border}`}}>
+            <span style={{fontSize:11,fontWeight:700,letterSpacing:1,color:BRAND.muted,textTransform:"uppercase",alignSelf:"center",marginRight:4}}>Pillars:</span>
+            {pack.pillars.map((p,i) => (
+              <span key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",background:PILLAR_COLORS[i]+"20",border:`1.5px solid ${PILLAR_COLORS[i]}`,fontSize:12,fontWeight:700,color:PILLAR_COLORS[i]}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:PILLAR_COLORS[i],display:"inline-block"}}/>
+                {p.emoji} {p.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:18}}>
+          <span style={{fontSize:13,color:BRAND.muted}}>Generate</span>
+          {[5,10,15,20,30].map(n => (
+            <button key={n} style={S.smBtn(n===ideaCount)} onClick={()=>setIdeaCount(n)}>{n}</button>
+          ))}
+          <span style={{fontSize:13,color:BRAND.muted}}>ideas</span>
+        </div>
+
+        <button style={S.rainbowBtn} onClick={genIdeas}>
+          {loading==="ideas" ? "Generating..." : "Generate Ideas"}
+        </button>
+
+        {ideas.length>0 && (
+          <div style={{marginTop:22}}>
+            {ideas.map((idea,i) => {
+              const pc = pillarColor(idea.pillar);
+              const isPicked = !!picked.find(p=>p.title===idea.title);
+              return (
+                <div key={i} style={{display:"flex",alignItems:"stretch",marginBottom:8,border:`1px solid ${BRAND.border}`,overflow:"hidden",background:isPicked?"#f9f9f9":BRAND.white}}>
+                  <div style={{width:6,background:pc,flexShrink:0}}/>
+                  <div style={{flex:1,padding:"12px 14px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <div style={{flex:1,paddingRight:12}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                          <span style={{fontSize:11,fontWeight:700,padding:"2px 10px",background:pc+"20",color:pc,border:`1px solid ${pc}`,letterSpacing:0.3}}>
+                            {pack?.pillars?.find(p=>p.name===idea.pillar)?.emoji} {idea.pillar}
+                          </span>
+                          <span style={{fontSize:11,color:BRAND.muted,letterSpacing:0.3,textTransform:"uppercase"}}>
+                            {idea.platform} · {idea.format}
+                          </span>
+                        </div>
+                        <div style={{fontWeight:700,fontSize:14,marginBottom:3}}>{idea.title}</div>
+                        <div style={{fontSize:13,color:BRAND.muted,fontStyle:"italic"}}>"{idea.hook}"</div>
+                      </div>
+                      <button style={S.smBtn(isPicked)} onClick={()=>{
+                        const has = picked.find(p=>p.title===idea.title);
+                        const u = has ? picked.filter(p=>p.title!==idea.title) : [...picked,idea];
+                        setPicked(u);
+                        saveUserData({picked:u});
+                      }}>
+                        {isPicked ? "✓ Picked" : "Pick"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {picked.length>0 && (
+              <button style={{...S.bigBtn(),marginTop:12}} onClick={()=>setNav(4)}>
+                View Picked ({picked.length}) →
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
-
   function SectionPicker() {
     return (
       <div style={S.card}>
