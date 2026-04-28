@@ -1,16 +1,1 @@
-{
-  "name": "creators-studio",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.43.4",
-    "next": "15.3.2",
-    "react": "^18",
-    "react-dom": "^18"
-  }
-}
+
