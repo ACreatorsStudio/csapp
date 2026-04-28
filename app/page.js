@@ -319,7 +319,7 @@ export default function App() {
   // ── AI calls ──────────────────────────────────────────
   async function generateStrategy() {
     if (!useGen()) return;
-    setLoading("strategy"); setScreen("app");
+    setLoading("strategy");
     try {
       var prompt = "Strategy for: Name:"+profile.name+", Job:"+profile.job+", Brand:"+profile.brand+", Platforms:"+profile.platforms.join(",")+", Goals:"+profile.goals.join(",")+", Vibe:"+profile.vibe+". Return JSON only: {\"angle\":\"2 sentence unique angle\",\"voice\":\"voice description\",\"pillars\":[{\"name\":\"...\",\"emoji\":\"...\",\"description\":\"...\"}]}";
       var txt = await callAI([{ role:"user", content:prompt }], "Return JSON only, no markdown.");
@@ -327,9 +327,17 @@ export default function App() {
       if (data) {
         setPack(data);
         saveUserData({ pack:data, profile:profile });
+        setNav(1); // go straight to Strategy tab so user sees results
+        setScreen("app");
+      } else {
+        setPack({ angle:"Could not generate — check your API key.", voice:"", pillars:[] });
+        setScreen("app");
       }
-    } catch(e) { setPack({ angle:"Could not generate — check your API key.", voice:"", pillars:[] }); }
-    setLoading(""); setNav(0);
+    } catch(e) {
+      setPack({ angle:"Could not generate — check your API key.", voice:"", pillars:[] });
+      setScreen("app");
+    }
+    setLoading("");
   }
 
   async function genMonthPlan(idx) {
@@ -446,10 +454,16 @@ export default function App() {
   var genPct = Math.min((gens / FREE_LIMIT) * 100, 100);
 
   // ── Loading spinner ───────────────────────────────────
-  if (authLoading) {
+  if (authLoading || loading === "strategy") {
     return (
-      <div style={{ minHeight:"100vh", background:BRAND.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <div style={{ fontSize:14, color:BRAND.muted }}>Loading...</div>
+      <div style={{ minHeight:"100vh", background:BRAND.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
+        <div style={{ fontSize:24, fontWeight:900, letterSpacing:-1, ...gradText(BRAND.rainbow) }}>CREATORS STUDIO</div>
+        <div style={{ fontSize:14, color:BRAND.muted }}>
+          {loading === "strategy" ? "Building your content strategy..." : "Loading..."}
+        </div>
+        <div style={{ width:200, height:4, background:BRAND.border, borderRadius:4, overflow:"hidden" }}>
+          <div style={{ width:"60%", height:4, background:BRAND.rainbow, borderRadius:4, animation:"none" }} />
+        </div>
       </div>
     );
   }
@@ -1123,6 +1137,20 @@ export default function App() {
 
   var NAV_LABELS = ["Home","Strategy","Monthly Plan","Ideas","Picker","Shoot Plan","Hooks","Scheduler","Analytics","Advisor"];
 
+  // Journey steps with guidance text
+  var JOURNEY = [
+    { nav:0, label:"Home",         next:1,  nextLabel:"View My Strategy →",        hint:"Your dashboard — see your content plan at a glance." },
+    { nav:1, label:"Strategy",     next:2,  nextLabel:"Plan My First Month →",      hint:"Your unique content angle, voice and pillars." },
+    { nav:2, label:"Monthly Plan", next:3,  nextLabel:"Generate Content Ideas →",   hint:"Set a monthly focus and get a week-by-week plan." },
+    { nav:3, label:"Ideas",        next:4,  nextLabel:"Pick Your Ideas →",          hint:"Generate platform-specific ideas based on your pillars." },
+    { nav:4, label:"Picker",       next:5,  nextLabel:"Create Shoot Plans →",       hint:"Choose which ideas go into this month." },
+    { nav:5, label:"Shoot Plan",   next:6,  nextLabel:"Generate Hooks and Captions →", hint:"Scripts, shot lists and repurpose ideas per piece." },
+    { nav:6, label:"Hooks",        next:7,  nextLabel:"Build My Schedule →",        hint:"5 hook types and platform captions for every post." },
+    { nav:7, label:"Scheduler",    next:8,  nextLabel:"View My Progress →",         hint:"Drag your content into a 4-week posting calendar." },
+    { nav:8, label:"Analytics",    next:9,  nextLabel:"Ask My AI Advisor →",        hint:"Track posts done, streaks and pillar coverage." },
+    { nav:9, label:"Advisor",      next:null, nextLabel:null,                        hint:"Ask anything about your strategy and growth." },
+  ];
+
   return (
     <div style={{ minHeight:"100vh", background:BRAND.bg, fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif", color:BRAND.black }}>
       {showLimitModal && (
@@ -1155,6 +1183,37 @@ export default function App() {
         })}
       </div>
       <div style={{ maxWidth:900, margin:"0 auto", padding:"28px 20px" }}>
+        {/* Journey progress + next step banner */}
+        {pack && (
+          <div style={{ marginBottom:20 }}>
+            {/* Step dots */}
+            <div style={{ display:"flex", gap:4, marginBottom:12, alignItems:"center" }}>
+              {JOURNEY.slice(1).map(function(j, i) {
+                var done = nav > j.nav;
+                var active = nav === j.nav;
+                return (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <div style={{ width:active?28:8, height:8, borderRadius:4, background:active?BRAND.rainbow:done?"#4ecdc4":BRAND.border, transition:"all 0.3s", cursor:"pointer" }} onClick={function(){ setNav(j.nav); }} />
+                  </div>
+                );
+              })}
+              <span style={{ fontSize:11, color:BRAND.muted, marginLeft:8, letterSpacing:0.5 }}>
+                {JOURNEY[nav] ? JOURNEY[nav].label : ""} — {JOURNEY[nav] ? JOURNEY[nav].hint : ""}
+              </span>
+            </div>
+            {/* Next step prompt — only show if not on last step */}
+            {JOURNEY[nav] && JOURNEY[nav].next !== null && nav > 0 && (
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 20px", background:BRAND.white, border:`1px solid ${BRAND.border}`, borderLeft:`4px solid #4ecdc4` }}>
+                <div style={{ fontSize:13, color:BRAND.muted }}>
+                  Next step: <strong style={{ color:BRAND.black }}>{JOURNEY[JOURNEY[nav].next] ? JOURNEY[JOURNEY[nav].next].label : ""}</strong>
+                </div>
+                <button style={{ ...rainbowBtn, padding:"8px 20px", fontSize:13 }} onClick={function(){ setNav(JOURNEY[nav].next); }}>
+                  {JOURNEY[nav].nextLabel}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {renderSection()}
       </div>
     </div>
