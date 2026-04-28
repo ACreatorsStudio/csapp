@@ -82,7 +82,7 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [screen, setScreen] = useState("onboarding");
+  const [screen, setScreen] = useState("landing");
   const [obStep, setObStep] = useState(0);
   const [profile, setProfile] = useState({ name:"", job:"", brand:"", platforms:[], goals:[], vibe:"", activePlatforms:[] });
   const [pack, setPack] = useState(null);
@@ -134,18 +134,22 @@ export default function App() {
 
   async function loadUserData(userId) {
     try {
-      var res = await fetch("/api/user/load", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId:userId }) });
+      var res = await fetch("/api/user/load", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ userId:userId })
+      });
       var json = await res.json();
       var d = json.data;
-      if (!d) {
-        // New user via Google — no data yet, stay on onboarding
-        setScreen("onboarding");
+      if (!d || !d.pack) {
+        // New user or no strategy yet — clear any stale state and go to onboarding
+        setScreen("onboarding"); // new user, go to questionnaire
         setAuthLoading(false);
         return;
       }
+      // Returning user — restore all their data
       if (d.profile) setProfile(d.profile);
-      if (d.pack) { setPack(d.pack); setScreen("app"); }
-      else { setScreen("onboarding"); } // has account but no strategy yet
+      setPack(d.pack);
       if (d.month_plans) setMonthPlans(d.month_plans);
       if (d.ideas) setIdeas(d.ideas);
       if (d.picked) setPicked(d.picked);
@@ -156,6 +160,8 @@ export default function App() {
       if (d.saved_chats) setSavedChats(d.saved_chats);
       if (d.gens) setGens(d.gens);
       if (d.is_pro) setIsPro(d.is_pro);
+      setNav(0); // go to home/dashboard
+      setScreen("app"); // skip onboarding entirely
       setAuthLoading(false);
     } catch(e) {
       setScreen("onboarding");
@@ -206,9 +212,12 @@ export default function App() {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
-    setUser(null); setPack(null); setScreen("onboarding");
+    setUser(null); setPack(null); setScreen("landing");
     setProfile({ name:"", job:"", brand:"", platforms:[], goals:[], vibe:"", activePlatforms:[] });
-    setObStep(0); setNav(0);
+    setIdeas([]); setPicked([]); setShoots({}); setHooks({});
+    setSlots({}); setMonthPlans([]); setStats({ posted:0, streak:0 });
+    setChat([]); setSavedChats([]); setGens(0); setIsPro(false);
+    setObStep(0); setNav(0); setShowAuth(false);
   }
 
   function canGen() { return isPro || gens < FREE_LIMIT; }
@@ -416,6 +425,69 @@ export default function App() {
     );
   }
 
+  if (screen === "landing") {
+    return (
+      <div style={{ minHeight:"100vh", background:BRAND.bg, fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif", color:BRAND.black }}>
+        {/* Nav */}
+        <div style={{ padding:"0 40px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${BRAND.border}`, background:BRAND.bg }}>
+          <div style={{ fontSize:13, fontWeight:700, ...gradText(BRAND.rainbow) }}>CREATORS STUDIO</div>
+          <button style={{ ...outlineBtn, padding:"8px 20px", fontSize:13 }} onClick={function(){ setAuthMode("login"); setShowAuth(true); }}>Sign In</button>
+        </div>
+
+        {/* Hero */}
+        <div style={{ textAlign:"center", padding:"80px 24px 60px", borderBottom:`1px solid ${BRAND.border}` }}>
+          <div style={{ fontSize:11, fontWeight:700, letterSpacing:2, color:BRAND.muted, textTransform:"uppercase", marginBottom:24 }}>by Curated Niche Studios</div>
+          <div style={{ fontSize:"clamp(56px,10vw,110px)", fontWeight:900, lineHeight:0.9, letterSpacing:-3, ...gradText(BRAND.rainbow) }}>CREATORS</div>
+          <div style={{ fontSize:"clamp(56px,10vw,110px)", fontWeight:900, lineHeight:0.9, letterSpacing:-3, color:BRAND.black, marginBottom:32 }}>STUDIO</div>
+          <div style={{ fontSize:18, color:BRAND.muted, maxWidth:480, margin:"0 auto 48px" }}>
+            Your AI content system. Strategy, ideas, scripts, hooks and a posting schedule — all in one place.
+          </div>
+          <div style={{ display:"flex", gap:16, justifyContent:"center", flexWrap:"wrap" }}>
+            <button style={{ ...rainbowBtn, fontSize:16, padding:"16px 40px" }} onClick={function(){ setScreen("onboarding"); }}>
+              Get Started Free →
+            </button>
+            <button style={{ ...outlineBtn, fontSize:16, padding:"16px 40px" }} onClick={function(){ setAuthMode("login"); setShowAuth(true); }}>
+              Sign In
+            </button>
+          </div>
+          <div style={{ fontSize:12, color:BRAND.muted, marginTop:16 }}>Free — no credit card required</div>
+        </div>
+
+        {/* Features */}
+        <div style={{ maxWidth:860, margin:"0 auto", padding:"60px 24px" }}>
+          <div style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:BRAND.muted, textAlign:"center", marginBottom:40 }}>Everything you need to show up consistently</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16 }}>
+            {[
+              { emoji:"🧭", title:"Content Strategy", desc:"AI builds your unique content angle and pillars based on who you are." },
+              { emoji:"💡", title:"Endless Ideas", desc:"Never run out of ideas. Generate 5 to 30 platform-specific content ideas instantly." },
+              { emoji:"🎬", title:"Shoot Plans", desc:"Full scripts, shot lists and repurposing ideas for every piece of content." },
+              { emoji:"🪝", title:"Hooks and Captions", desc:"5 hook types and platform-native captions generated for every post." },
+              { emoji:"📅", title:"Content Scheduler", desc:"Drag and drop your content into a 4-week calendar." },
+              { emoji:"🤖", title:"AI Advisor", desc:"Ask anything about your strategy, growth or content. Get specific answers." },
+            ].map(function(f) {
+              return (
+                <div key={f.title} style={{ background:BRAND.white, padding:24, border:`1px solid ${BRAND.border}` }}>
+                  <div style={{ fontSize:28, marginBottom:12 }}>{f.emoji}</div>
+                  <div style={{ fontWeight:800, fontSize:15, marginBottom:8 }}>{f.title}</div>
+                  <div style={{ fontSize:13, color:BRAND.muted, lineHeight:1.6 }}>{f.desc}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div style={{ background:BRAND.black, color:BRAND.white, textAlign:"center", padding:"60px 24px" }}>
+          <div style={{ fontSize:32, fontWeight:900, letterSpacing:-1, marginBottom:16 }}>Ready to start creating?</div>
+          <div style={{ fontSize:15, opacity:0.6, marginBottom:32 }}>Join creators who are showing up consistently with AI.</div>
+          <button style={{ ...rainbowBtn, fontSize:16, padding:"16px 48px" }} onClick={function(){ setScreen("onboarding"); }}>
+            Get Started Free →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (screen === "onboarding") {
     var steps = ["You","Platforms","Goals","Brand","Vibe"];
     function toggle(arr, val, max) { max = max || 99; if (arr.indexOf(val) !== -1) return arr.filter(function(x){ return x !== val; }); if (arr.length >= max) return arr; return arr.concat([val]); }
@@ -581,9 +653,8 @@ export default function App() {
                   <button style={{ ...rainbowBtn, padding:"10px 24px", fontSize:13 }} onClick={function(){
                     var np = Object.assign({}, profile, { activePlatforms:currentActive });
                     setProfile(np); saveUserData({ profile:np });
-                    // Dismiss warning by ensuring activePlatforms is saved
-                    alert("Platforms confirmed! You are all set.");
-                  }}>Confirm Selection and Continue</button>
+                    setNav(1); // go straight to Strategy
+                  }}>Confirm and View My Strategy</button>
                 )}
                 <button style={{ ...smBtn(false) }} onClick={function(){ setScreen("upgrade"); }}>Upgrade for all platforms</button>
               </div>
