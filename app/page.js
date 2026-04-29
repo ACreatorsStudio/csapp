@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 const API_URL = "/api/ai";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-opus-4-5";
 const FREE_LIMIT = 15;
 const RESET_DAYS = 30;
 
