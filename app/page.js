@@ -131,7 +131,8 @@ export default function App() {
   const [gens, setGens] = useState(0);
   const [gensResetDate, setGensResetDate] = useState(null);
   const [isPro, setIsPro] = useState(false);
-  const [billing, setBilling] = useState("monthly");
+  const [couponCode, setCouponCode] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [monthInput, setMonthInput] = useState("");
@@ -537,7 +538,10 @@ export default function App() {
 
   // UPGRADE
   if (screen==="upgrade") {
-    var plans=[{name:"Free",price:"$0",sub:"Forever free",features:["15 AI generations / month","3 platforms","Full strategy"],cta:"Current Plan",pro:false},{name:"Creator",price:billing==="monthly"?"$19":"$15",sub:billing==="monthly"?"per month":"per month, billed annually",features:["Unlimited AI generations","All platforms","All sections","Priority support"],cta:"Start Creator →",pro:true}];
+    var plans=[
+      {name:"Free",price:"$0",sub:"Forever free",features:["15 AI generations / month","3 platforms","Full strategy and planning"],cta:"Current Plan",pro:false},
+      {name:"Creator",price:billing==="monthly"?"$19":"$15",sub:billing==="monthly"?"per month after 14-day free trial":"per month, billed annually",features:["14-day free trial — no card needed","Unlimited AI generations","All platforms","All sections + Playbook","Priority support"],cta:"Start Free Trial →",pro:true}
+    ];
     return (
       <div style={{ minHeight:"100vh", background:BRAND.bg, fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif", color:BRAND.black }}>
         <div style={{ background:BRAND.bg, borderBottom:"1px solid "+BRAND.border, padding:"0 32px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -546,11 +550,26 @@ export default function App() {
         </div>
         <div style={{ maxWidth:700, margin:"60px auto", padding:"0 24px" }}>
           <div style={{ fontSize:44, fontWeight:900, letterSpacing:-2, marginBottom:8 }}>Choose your plan</div>
-          <div style={{ color:BRAND.muted, marginBottom:36 }}>Unlock unlimited AI-powered content creation</div>
+          <div style={{ color:BRAND.muted, marginBottom:16 }}>Start free — no credit card required</div>
+
+          <div style={{ padding:"14px 20px", background:BRAND.black, color:BRAND.white, marginBottom:36, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+            <div>
+              <div style={{ fontWeight:700, fontSize:14 }}>🎁 VIP Early Access — 3 months free</div>
+              <div style={{ fontSize:12, opacity:0.6, marginTop:2 }}>Got an invite code? Enter it below to get 3 months free.</div>
+            </div>
+            <div style={{ fontSize:13, ...gradText(BRAND.rainbow), fontWeight:700 }}>DM us on LinkedIn or Instagram →</div>
+          </div>
+
+          {/* Coupon input */}
+          <div style={{ marginBottom:24, display:"flex", gap:8 }}>
+            <input style={{ ...inputSt, flex:1, fontSize:13, padding:"10px 14px" }} placeholder="Have a VIP code? Enter it here..." value={couponCode} onChange={function(e){ setCouponCode(e.target.value); }} />
+          </div>
+
           <div style={{ display:"flex", gap:8, marginBottom:36 }}>
             <button style={smBtn(billing==="monthly")} onClick={function(){ setBilling("monthly"); }}>Monthly</button>
             <button style={smBtn(billing==="annual")} onClick={function(){ setBilling("annual"); }}>Annual — save 21%</button>
           </div>
+
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
             {plans.map(function(pl){
               return <div key={pl.name} style={{ ...cardSt, border:pl.pro?"2px solid "+BRAND.black:undefined, position:"relative" }}>
@@ -560,10 +579,26 @@ export default function App() {
                 <div style={{ fontSize:13, color:BRAND.muted, marginBottom:20 }}>{pl.sub}</div>
                 <div style={divider}/>
                 {pl.features.map(function(f){ return <div key={f} style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, fontSize:14 }}><span style={{ fontWeight:700 }}>✓</span>{f}</div>; })}
-                <button style={{ ...darkBtn, width:"100%", marginTop:20, textAlign:"center", opacity:pl.pro?1:0.5 }} onClick={function(){ if(pl.pro){ setIsPro(true); saveUserData({isPro:true}); setScreen("app"); } }}>{pl.cta}</button>
+                <button
+                  style={{ ...darkBtn, width:"100%", marginTop:20, textAlign:"center", opacity:pl.pro?1:0.5 }}
+                  disabled={pl.pro&&checkoutLoading}
+                  onClick={function(){
+                    if(pl.pro) startCheckout(billing);
+                  }}>
+                  {pl.pro&&checkoutLoading ? "Redirecting to payment..." : pl.cta}
+                </button>
               </div>;
             })}
           </div>
+
+          {/* Manage subscription for pro users */}
+          {isPro && (
+            <div style={{ marginTop:24, textAlign:"center" }}>
+              <button style={{ ...outlineBtn, fontSize:13 }} onClick={openPortal}>
+                Manage Subscription / Cancel →
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
