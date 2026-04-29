@@ -164,18 +164,30 @@ export default function App() {
 
   // ── Auth listener ─────────────────────────────────────
   useEffect(function() {
+    // Set a timeout fallback so app never gets stuck on loading
+    var timeout = setTimeout(function() {
+      setAuthLoading(false);
+      setScreen("landing");
+    }, 5000);
+
     supabase.auth.getSession().then(function(res) {
+      clearTimeout(timeout);
       var session = res.data.session;
       var u = session ? session.user : null;
       setUser(u);
       if (u) { loadUserData(u.id); }
-      else { setAuthLoading(false); }
+      else { setAuthLoading(false); setScreen("landing"); }
+    }).catch(function() {
+      clearTimeout(timeout);
+      setAuthLoading(false);
+      setScreen("landing");
     });
+
     var sub = supabase.auth.onAuthStateChange(function(event, session) {
       var u = session ? session.user : null;
       setUser(u);
       if (event === "SIGNED_IN" && u) { loadUserData(u.id); }
-      if (event === "SIGNED_OUT") { setAuthLoading(false); }
+      if (event === "SIGNED_OUT") { setAuthLoading(false); setScreen("landing"); }
     });
     return function() { sub.data.subscription.unsubscribe(); };
   }, []);
@@ -322,20 +334,32 @@ export default function App() {
     setLoading("strategy");
     try {
       var prompt = "Strategy for: Name:"+profile.name+", Job:"+profile.job+", Brand:"+profile.brand+", Platforms:"+profile.platforms.join(",")+", Goals:"+profile.goals.join(",")+", Vibe:"+profile.vibe+". Return JSON only: {\"angle\":\"2 sentence unique angle\",\"voice\":\"voice description\",\"pillars\":[{\"name\":\"...\",\"emoji\":\"...\",\"description\":\"...\"}]}";
-      var txt = await callAI([{ role:"user", content:prompt }], "Return JSON only, no markdown.");
+      var res = await fetch(API_URL, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ model:MODEL, max_tokens:1200, system:"Return JSON only, no markdown.", messages:[{ role:"user", content:prompt }] })
+      });
+      var raw = await res.json();
+      // Show exact error if something goes wrong
+      if (!res.ok || raw.error) {
+        var errMsg = raw.error ? JSON.stringify(raw.error) : "HTTP "+res.status;
+        setPack({ angle:"API Error: "+errMsg, voice:"", pillars:[] });
+        setScreen("app"); setLoading(""); setNav(1);
+        return;
+      }
+      var txt = raw?.content?.[0]?.text || "";
       var data = parseJSON(txt);
       if (data) {
         setPack(data);
         saveUserData({ pack:data, profile:profile });
-        setNav(1); // go straight to Strategy tab so user sees results
-        setScreen("app");
+        setNav(1); setScreen("app");
       } else {
-        setPack({ angle:"Could not generate — check your API key.", voice:"", pillars:[] });
-        setScreen("app");
+        setPack({ angle:"Could not parse response. Try again.", voice:"", pillars:[] });
+        setScreen("app"); setNav(1);
       }
     } catch(e) {
-      setPack({ angle:"Could not generate — check your API key.", voice:"", pillars:[] });
-      setScreen("app");
+      setPack({ angle:"Network error: "+e.message, voice:"", pillars:[] });
+      setScreen("app"); setNav(1);
     }
     setLoading("");
   }
