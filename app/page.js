@@ -151,6 +151,7 @@ export default function App() {
   const [gens, setGens] = useState(0);
   const [gensResetDate, setGensResetDate] = useState(null);
   const [isPro, setIsPro] = useState(false);
+  const [postStatus, setPostStatus] = useState({});
   const [billing, setBilling] = useState("monthly");
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -219,7 +220,7 @@ export default function App() {
       if (d.stats) setStats(d.stats);
       if (d.saved_chats) setSavedChats(d.saved_chats);
       if (d.gens) setGens(d.gens);
-      if (d.gens_reset_date) setGensResetDate(d.gens_reset_date);
+      if (d.post_status) setPostStatus(d.post_status);
       if (d.is_pro) setIsPro(d.is_pro);
       setNav(0); setScreen("app");
       setAuthLoading(false);
@@ -244,7 +245,7 @@ export default function App() {
     if (updates.savedChats !== undefined) mapped.saved_chats = updates.savedChats;
     if (updates.gens !== undefined) mapped.gens = updates.gens;
     if (updates.gensResetDate !== undefined) mapped.gens_reset_date = updates.gensResetDate;
-    if (updates.isPro !== undefined) mapped.is_pro = updates.isPro;
+    if (updates.postStatus !== undefined) mapped.post_status = updates.postStatus;
     try {
       await fetch("/api/user/save", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId:user.id, data:mapped }) });
     } catch(e) {}
@@ -451,6 +452,12 @@ export default function App() {
       setDragOver(slot ? slot.getAttribute("data-slot") : null);
     }
     function onUp(ev) {
+      if (!dragRef.current) {
+        setDragItem(null); setDragOver(null);
+        window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp);
+        window.removeEventListener("touchmove", onMove); window.removeEventListener("touchend", onUp);
+        return;
+      }
       var p = ev.changedTouches ? { x:ev.changedTouches[0].clientX, y:ev.changedTouches[0].clientY } : { x:ev.clientX, y:ev.clientY };
       var el = document.elementFromPoint(p.x, p.y);
       var slotEl = el && el.closest("[data-slot]");
@@ -458,12 +465,12 @@ export default function App() {
       if (slotKey) {
         setSlots(function(prev) {
           var ns = Object.assign({}, prev);
-          if (dragRef.current.fromSlot && dragRef.current.fromSlot !== slotKey) delete ns[dragRef.current.fromSlot];
-          ns[slotKey] = dragRef.current.item;
+          if (dragRef.current && dragRef.current.fromSlot && dragRef.current.fromSlot !== slotKey) delete ns[dragRef.current.fromSlot];
+          if (dragRef.current) ns[slotKey] = dragRef.current.item;
           saveUserData({ slots:ns }); return ns;
         });
-      } else if (dragRef.current.fromSlot && el && el.closest("[data-pool]")) {
-        setSlots(function(prev) { var ns = Object.assign({}, prev); delete ns[dragRef.current.fromSlot]; saveUserData({ slots:ns }); return ns; });
+      } else if (dragRef.current && dragRef.current.fromSlot && el && el.closest("[data-pool]")) {
+        setSlots(function(prev) { var ns = Object.assign({}, prev); if(dragRef.current) delete ns[dragRef.current.fromSlot]; saveUserData({ slots:ns }); return ns; });
       }
       setDragItem(null); setDragOver(null); dragRef.current = null;
       window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp);
@@ -473,8 +480,8 @@ export default function App() {
     window.addEventListener("touchmove", onMove, { passive:false }); window.addEventListener("touchend", onUp);
   }
 
-  var scheduledTitles = Object.values(slots).map(function(i){ return i.title; });
-  var unscheduled = picked.filter(function(i){ return scheduledTitles.indexOf(i.title) === -1; });
+  var scheduledTitles = Object.values(slots || {}).map(function(i){ return i && i.title ? i.title : ""; });
+  var unscheduled = picked.filter(function(i){ return i && i.title && scheduledTitles.indexOf(i.title) === -1; });
   var genPct = Math.min((gens / FREE_LIMIT) * 100, 100);
 
   // ── Loading spinner ───────────────────────────────────
@@ -1025,7 +1032,7 @@ export default function App() {
     if (nav === 7) {
       return (
         <div style={{ position:"relative" }}>
-          {dragItem && <div style={{ position:"fixed", left:dragPos.x+10, top:dragPos.y+10, zIndex:9999, pointerEvents:"none", padding:"8px 14px", background:pillarColor(dragItem.item.pillar), color:"#fff", fontSize:12, fontWeight:700, maxWidth:160, boxShadow:"0 8px 24px rgba(0,0,0,0.25)", opacity:0.92 }}>{dragItem.item.title}</div>}
+          {dragItem && dragItem.item && <div style={{ position:"fixed", left:dragPos.x+10, top:dragPos.y+10, zIndex:9999, pointerEvents:"none", padding:"8px 14px", background:pillarColor(dragItem.item.pillar), color:"#fff", fontSize:12, fontWeight:700, maxWidth:160, boxShadow:"0 8px 24px rgba(0,0,0,0.25)", opacity:0.92 }}>{dragItem.item.title}</div>}
           <div style={{ ...cardSt, marginBottom:12 }}>
             <div style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:BRAND.muted, marginBottom:4 }}>4-Week Content Scheduler</div>
             <div style={{ fontSize:13, color:BRAND.muted }}>Drag ideas onto the calendar slots</div>
@@ -1084,8 +1091,170 @@ export default function App() {
       );
     }
 
-    // ANALYTICS
+    // PLAYBOOK
     if (nav === 8) {
+      // Group scheduled ideas by week
+      var weekGroups = {};
+      WEEKS.forEach(function(week) {
+        var weekItems = [];
+        DAYS.forEach(function(day) {
+          var key = "w"+week+"_"+day;
+          var idea = slots[key];
+          if (idea) weekItems.push({ idea:idea, day:day, slotKey:key });
+        });
+        if (weekItems.length > 0) weekGroups[week] = weekItems;
+      });
+
+      var hasContent = Object.keys(weekGroups).length > 0;
+      var STATUS_STEPS = ["Draft","Shot","Edited","Posted"];
+      var STATUS_COLORS = { Draft:"#f9c74f", Shot:"#4ecdc4", Edited:"#c77dff", Posted:"#7ed957" };
+
+      return (
+        <div>
+          <div style={{ ...cardSt, background:BRAND.black, color:BRAND.white, borderColor:BRAND.black, marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:"uppercase", opacity:0.5, marginBottom:6 }}>Your Execution Plan</div>
+            <div style={{ fontSize:22, fontWeight:900, letterSpacing:-0.5 }}>
+              {monthPlans[curMonth] ? monthPlans[curMonth].focus : "This Month's Playbook"}
+            </div>
+            {monthPlans[curMonth] && <div style={{ opacity:0.6, fontSize:14, marginTop:4 }}>Focus: {monthPlans[curMonth].userInput}</div>}
+            <div style={{ marginTop:16, display:"flex", gap:16, flexWrap:"wrap" }}>
+              {[
+                { l:"Pieces planned", v:picked.length },
+                { l:"Scheduled", v:Object.values(slots).length },
+                { l:"Posted", v:Object.values(postStatus).filter(function(s){ return s==="Posted"; }).length }
+              ].map(function(st) {
+                return <div key={st.l} style={{ textAlign:"center" }}><div style={{ fontSize:24, fontWeight:900 }}>{st.v}</div><div style={{ fontSize:11, opacity:0.5, textTransform:"uppercase", letterSpacing:0.5 }}>{st.l}</div></div>;
+              })}
+            </div>
+          </div>
+
+          {!hasContent && (
+            <div style={{ ...cardSt, textAlign:"center", padding:40 }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>📅</div>
+              <div style={{ fontWeight:700, fontSize:16, marginBottom:8 }}>No content scheduled yet</div>
+              <div style={{ color:BRAND.muted, fontSize:14, marginBottom:20 }}>Go to the Scheduler tab and drag your ideas onto the calendar first.</div>
+              <button style={rainbowBtn} onClick={function(){ setNav(7); }}>Go to Scheduler →</button>
+            </div>
+          )}
+
+          {WEEKS.map(function(week) {
+            if (!weekGroups[week]) return null;
+            var weekTheme = monthPlans[curMonth] && monthPlans[curMonth].weeklyThemes ? monthPlans[curMonth].weeklyThemes[week-1] : "";
+            return (
+              <div key={week} style={{ marginBottom:24 }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:12 }}>
+                  <div style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:"uppercase" }}>WEEK {week}</div>
+                  {weekTheme && <div style={{ fontSize:13, color:BRAND.muted, fontStyle:"italic" }}>{weekTheme}</div>}
+                </div>
+                {weekGroups[week].map(function(entry, i) {
+                  var idea = entry.idea;
+                  var pc = pillarColor(idea.pillar);
+                  var plan = shoots[idea.title];
+                  var hookData = hooks[idea.title];
+                  var firstHook = hookData && hookData.hooks && hookData.hooks[0] ? hookData.hooks[0] : null;
+                  var firstCaption = hookData && hookData.captions && hookData.captions[0] ? hookData.captions[0] : null;
+                  var status = postStatus[idea.title] || "Draft";
+                  var pillarObj = pack && pack.pillars ? pack.pillars.find(function(p){ return p.name===idea.pillar; }) : null;
+
+                  return (
+                    <div key={i} style={{ ...cardSt, borderLeft:"4px solid "+pc, marginBottom:12 }}>
+                      {/* Header */}
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+                        <div>
+                          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:11, fontWeight:700, padding:"2px 10px", background:pc+"20", color:pc, border:"1px solid "+pc }}>{pillarObj?pillarObj.emoji:""} {idea.pillar}</span>
+                            <span style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase" }}>{entry.day} · {idea.platform} · {idea.format}</span>
+                          </div>
+                          <div style={{ fontSize:17, fontWeight:800 }}>{idea.title}</div>
+                        </div>
+                        {/* Status tracker */}
+                        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                          {STATUS_STEPS.map(function(st) {
+                            var isActive = status === st;
+                            var isDone = STATUS_STEPS.indexOf(status) > STATUS_STEPS.indexOf(st);
+                            return (
+                              <button key={st} style={{ padding:"4px 12px", fontSize:11, fontWeight:700, cursor:"pointer", border:"1.5px solid "+(isActive?STATUS_COLORS[st]:isDone?STATUS_COLORS[st]:BRAND.border), background:isActive?STATUS_COLORS[st]:isDone?STATUS_COLORS[st]+"30":"transparent", color:isActive?BRAND.white:isDone?STATUS_COLORS[st]:BRAND.muted, borderRadius:20 }}
+                                onClick={function(){
+                                  var ns = Object.assign({}, postStatus); ns[idea.title] = st;
+                                  setPostStatus(ns); saveUserData({ postStatus:ns });
+                                }}>{isDone||isActive?"✓ ":""}{st}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Hook */}
+                      {firstHook && (
+                        <div style={{ marginBottom:12 }}>
+                          <div style={{ fontSize:10, fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:BRAND.muted, marginBottom:6 }}>Hook — {firstHook.type}</div>
+                          <div style={{ padding:12, background:"#f9f9f9", border:"1px solid "+BRAND.border, fontSize:14, lineHeight:1.6, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
+                            <div style={{ flex:1 }}>{firstHook.text}</div>
+                            <button style={{ fontSize:11, fontWeight:700, padding:"4px 12px", background:BRAND.black, color:BRAND.white, border:"none", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}
+                              onClick={function(){ navigator.clipboard.writeText(firstHook.text); }}>Copy</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Caption */}
+                      {firstCaption && (
+                        <div style={{ marginBottom:12 }}>
+                          <div style={{ fontSize:10, fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:BRAND.muted, marginBottom:6 }}>Caption</div>
+                          <div style={{ padding:12, background:"#f9f9f9", border:"1px solid "+BRAND.border, fontSize:14, lineHeight:1.6, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12 }}>
+                            <div style={{ flex:1, whiteSpace:"pre-wrap" }}>{firstCaption.text}{firstCaption.cta?"\n\n"+firstCaption.cta:""}</div>
+                            <button style={{ fontSize:11, fontWeight:700, padding:"4px 12px", background:BRAND.black, color:BRAND.white, border:"none", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}
+                              onClick={function(){ navigator.clipboard.writeText(firstCaption.text+(firstCaption.cta?"\n\n"+firstCaption.cta:"")); }}>Copy</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Shot list */}
+                      {plan && plan.shotList && plan.shotList.length > 0 && (
+                        <div style={{ marginBottom:12 }}>
+                          <div style={{ fontSize:10, fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:BRAND.muted, marginBottom:6 }}>Shot List</div>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                            {plan.shotList.map(function(sh, j) {
+                              return <span key={j} style={{ fontSize:12, padding:"4px 10px", background:"#f0f0f0", border:"1px solid "+BRAND.border }}>— {sh}</span>;
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Script preview */}
+                      {plan && plan.script && (
+                        <div>
+                          <div style={{ fontSize:10, fontWeight:700, letterSpacing:1, textTransform:"uppercase", color:BRAND.muted, marginBottom:6 }}>Script / Talking Points</div>
+                          <div style={{ padding:12, background:"#f9f9f9", border:"1px solid "+BRAND.border, fontSize:13, lineHeight:1.6, color:BRAND.muted, maxHeight:80, overflow:"hidden", position:"relative" }}>
+                            {plan.script.substring(0,200)}{plan.script.length>200?"...":""}
+                            <div style={{ position:"absolute", bottom:0, left:0, right:0, height:30, background:"linear-gradient(transparent,#f9f9f9)" }} />
+                          </div>
+                          <button style={{ fontSize:11, color:BRAND.muted, background:"transparent", border:"none", cursor:"pointer", padding:"4px 0", textDecoration:"underline" }}
+                            onClick={function(){ setNav(5); }}>View full script in Shoot Plan →</button>
+                        </div>
+                      )}
+
+                      {/* Missing content warnings */}
+                      {(!plan || !hookData) && (
+                        <div style={{ marginTop:12, padding:10, background:"#fff8f0", border:"1px solid #ffd4a0", fontSize:13, color:"#c07000" }}>
+                          {!plan && !hookData && "⚠️ No shoot plan or hooks yet — "}
+                          {plan && !hookData && "⚠️ No hooks yet — "}
+                          {!plan && hookData && "⚠️ No shoot plan yet — "}
+                          <span style={{ cursor:"pointer", textDecoration:"underline" }} onClick={function(){ setNav(!plan?5:6); }}>
+                            Generate {!plan?"shoot plan":""}{!plan&&!hookData?" and ":""}{!hookData?"hooks":""}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ANALYTICS
+    if (nav === 9) {
       return (
         <div style={cardSt}>
           <div style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:BRAND.muted, marginBottom:22 }}>Progress and Analytics</div>
@@ -1121,7 +1290,7 @@ export default function App() {
     }
 
     // ADVISOR
-    if (nav === 9) {
+    if (nav === 10) {
       return (
         <div style={cardSt}>
           <div style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:BRAND.muted, marginBottom:18 }}>AI Advisor</div>
