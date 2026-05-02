@@ -579,7 +579,7 @@ export default function App() {
                   <div style={divider}/>
                   {pl.features.map(function(f){return <div key={f} style={{display:"flex",gap:10,alignItems:"center",marginBottom:10,fontSize:14}}><span style={{fontWeight:700}}>✓</span>{f}</div>;})}
                   <button style={{...darkBtn,width:"100%",marginTop:20,textAlign:"center",opacity:pl.pro?1:0.5}} disabled={pl.pro&&checkoutLoading} onClick={function(){if(pl.pro)startCheckout(billing);}}>
-                    {pl.pro&&checkoutLoading?"Redirecting...":pl.cta}
+                    {pl.pro&&checkoutLoading?"Redirecting...":pl.pro?"Start Free Trial — "+( billing==="monthly"?"$19/mo":"$15/mo")+" →":pl.cta}
                   </button>
                 </div>
               );
