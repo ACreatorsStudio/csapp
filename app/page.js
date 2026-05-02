@@ -564,9 +564,14 @@ export default function App() {
           <div style={{display:"flex",gap:8,marginBottom:24}}>
             <input style={{...inputSt,flex:1,fontSize:13,padding:"10px 14px"}} placeholder="Have a VIP invite code? Enter it here..." value={couponCode} onChange={function(e){setCouponCode(e.target.value);}}/>
           </div>
-          <div style={{display:"flex",gap:8,marginBottom:36}}>
-            <button style={smBtn(billing==="monthly")} onClick={function(){setBilling("monthly");}}>Monthly</button>
-            <button style={smBtn(billing==="annual")} onClick={function(){setBilling("annual");}}>Annual — save 21%</button>
+          <div style={{display:"flex",gap:8,marginBottom:36,alignItems:"center"}}>
+            <span style={{fontSize:13,color:BRAND.muted,marginRight:4}}>Billing:</span>
+            <button style={{...smBtn(billing==="monthly"),padding:"10px 20px",fontSize:13}} onClick={function(){setBilling("monthly");}}>
+              Monthly — $19/mo
+            </button>
+            <button style={{...smBtn(billing==="annual"),padding:"10px 20px",fontSize:13}} onClick={function(){setBilling("annual");}}>
+              Annual — $15/mo <span style={{fontSize:11,opacity:0.7}}>(save 21%)</span>
+            </button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             {plans.map(function(pl){
@@ -578,8 +583,8 @@ export default function App() {
                   <div style={{fontSize:13,color:BRAND.muted,marginBottom:20}}>{pl.sub}</div>
                   <div style={divider}/>
                   {pl.features.map(function(f){return <div key={f} style={{display:"flex",gap:10,alignItems:"center",marginBottom:10,fontSize:14}}><span style={{fontWeight:700}}>✓</span>{f}</div>;})}
-                  <button style={{...darkBtn,width:"100%",marginTop:20,textAlign:"center",opacity:pl.pro?1:0.5}} disabled={pl.pro&&checkoutLoading} onClick={function(){if(pl.pro)startCheckout(billing);}}>
-                    {pl.pro&&checkoutLoading?"Redirecting...":pl.pro?"Start Free Trial — "+( billing==="monthly"?"$19/mo":"$15/mo")+" →":pl.cta}
+                  <button style={{...darkBtn,width:"100%",marginTop:20,textAlign:"center",opacity:pl.pro?1:0.5,whiteSpace:"nowrap"}} disabled={pl.pro&&checkoutLoading} onClick={function(){if(pl.pro)startCheckout(billing);}}>
+                    {pl.pro&&checkoutLoading?"Redirecting...":pl.pro?"Start 14-Day Free Trial →":pl.cta}
                   </button>
                 </div>
               );
