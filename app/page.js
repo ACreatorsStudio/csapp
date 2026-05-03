@@ -134,7 +134,29 @@ export default function App() {
   const [isPro, setIsPro] = useState(false);
   const [billing, setBilling] = useState("monthly");
   const [couponCode, setCouponCode] = useState("");
+  const [couponStatus, setCouponStatus] = useState(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [vipActivated, setVipActivated] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  async function validateAndActivateVip() {
+    if (!couponCode.trim()) return;
+    setCouponChecking(true); setCouponStatus(null);
+    try {
+      var res = await fetch("/api/vip/activate", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ code: couponCode.trim().toUpperCase(), userId: user&&user.id })
+      });
+      var data = await res.json();
+      setCouponStatus(data);
+      if (data.valid) {
+        setVipActivated(true);
+        setIsPro(true);
+        if (data.expiry) setGensResetDate(data.expiry);
+      }
+    } catch(e) { setCouponStatus({ valid:false, message:"Could not validate code" }); }
+    setCouponChecking(false);
+  }
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [monthInput, setMonthInput] = useState("");
@@ -189,7 +211,16 @@ export default function App() {
       if (d.saved_chats) setSavedChats(d.saved_chats);
       if (d.gens) setGens(d.gens);
       if (d.gens_reset_date) setGensResetDate(d.gens_reset_date);
-      if (d.is_pro) setIsPro(d.is_pro);
+      if (d.is_pro) {
+        // Check VIP expiry — auto downgrade if expired
+        if (d.vip_expiry && new Date() > new Date(d.vip_expiry)) {
+          setIsPro(false);
+          // Update Supabase silently
+          fetch("/api/user/save", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId:userId, data:{ is_pro:false } }) });
+        } else {
+          setIsPro(true);
+        }
+      }
       setNav(0); setScreen("app"); setAuthLoading(false);
     } catch(e) { setScreen("onboarding"); setAuthLoading(false); }
   }
@@ -249,7 +280,12 @@ export default function App() {
     try {
       var res = await fetch("/api/stripe/checkout", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ billing:billingType, userId:user&&user.id, email:user&&user.email, coupon:couponCode.trim()||null })
+        body:JSON.stringify({
+          billing: billingType,
+          userId: user&&user.id,
+          email: user&&user.email,
+          coupon: couponCode.trim().toUpperCase() || null  // ensure uppercase to match Stripe
+        })
       });
       var data = await res.json();
       if (data.url) { window.location.href = data.url; }
@@ -542,9 +578,51 @@ export default function App() {
   // ── UPGRADE ────────────────────────────────────────────
   if (screen==="upgrade") {
     var plans=[
-      {name:"Free",price:"$0",sub:"Forever free",features:["15 AI generations / month","3 platforms","Full strategy and planning"],cta:"Current Plan",pro:false},
-      {name:"Creator",price:billing==="monthly"?"$19":"$15",sub:billing==="monthly"?"per month after 14-day free trial":"per month, billed annually",features:["14-day free trial — no card needed","Unlimited AI generations","All platforms","All sections + Playbook","Priority support"],cta:"Start Free Trial →",pro:true}
+      {
+        name:"Free",
+        price:"$0",
+        sub:"No credit card needed",
+        features:[
+          "15 AI generations per month",
+          "3 platforms",
+          "Content strategy & pillars",
+          "Monthly planning & ideas",
+          "Basic scheduling"
+        ],
+        cta:"Current Plan",
+        pro:false
+      },
+      {
+        name:"Creator",
+        price:billing==="monthly"?"$19":"$15",
+        sub:billing==="monthly"?"per month · cancel anytime":"per month · billed annually",
+        features:[
+          "Unlimited AI generations",
+          "All platforms",
+          "Full content workflow",
+          "Shoot plans, hooks & captions",
+          "Playbook execution view",
+          "Priority support"
+        ],
+        cta:"Start 14-Day Free Trial →",
+        pro:true
+      }
     ];
+
+    // If VIP just activated — redirect to app
+    if (vipActivated) {
+      return (
+        <div style={{minHeight:"100vh",background:BRAND.bg,fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{textAlign:"center",maxWidth:480,padding:40}}>
+            <div style={{fontSize:48,marginBottom:16}}>🎉</div>
+            <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,marginBottom:8}}>VIP Access Activated!</div>
+            <div style={{fontSize:15,color:BRAND.muted,marginBottom:8}}>You have full Creator access for the next 3 months.</div>
+            <div style={{fontSize:13,color:BRAND.muted,marginBottom:32}}>No credit card needed. After 3 months you can choose to upgrade or continue on the free plan.</div>
+            <button style={{...rainbowBtn,fontSize:16,padding:"14px 40px"}} onClick={function(){ setScreen("app"); setNav(0); }}>Go to My Dashboard →</button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div style={{minHeight:"100vh",background:BRAND.bg,fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif",color:BRAND.black}}>
         <div style={{background:BRAND.bg,borderBottom:"1px solid "+BRAND.border,padding:"0 32px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -561,8 +639,26 @@ export default function App() {
             </div>
             <div style={{fontSize:13,...gradText(BRAND.rainbow),fontWeight:700}}>DM us on LinkedIn or Instagram →</div>
           </div>
-          <div style={{display:"flex",gap:8,marginBottom:24}}>
-            <input style={{...inputSt,flex:1,fontSize:13,padding:"10px 14px"}} placeholder="Have a VIP invite code? Enter it here..." value={couponCode} onChange={function(e){setCouponCode(e.target.value);}}/>
+          <div style={{marginBottom:24}}>
+            <div style={{display:"flex",gap:8}}>
+              <input
+                style={{...inputSt,flex:1,fontSize:13,padding:"10px 14px",border:"1.5px solid "+(couponStatus?couponStatus.valid?"#7ed957":"#f4845f":BRAND.border)}}
+                placeholder="Have a VIP invite code? Enter it here..."
+                value={couponCode}
+                onChange={function(e){ setCouponCode(e.target.value); setCouponStatus(null); setVipActivated(false); }}
+                onKeyDown={function(e){ if(e.key==="Enter") validateAndActivateVip(); }}
+              />
+              {couponCode.trim()&&!couponStatus&&(
+                <button style={{...darkBtn,padding:"10px 20px",fontSize:13,whiteSpace:"nowrap"}} onClick={validateAndActivateVip} disabled={couponChecking}>
+                  {couponChecking?"Checking...":"Apply Code"}
+                </button>
+              )}
+            </div>
+            {couponStatus&&(
+              <div style={{marginTop:8,padding:"10px 14px",background:couponStatus.valid?"#f0fff8":"#fff5f0",border:"1px solid "+(couponStatus.valid?"#c8f5e0":"#ffd4c8"),fontSize:13,color:couponStatus.valid?"#2d7a4f":"#f4845f",fontWeight:600}}>
+                {couponStatus.valid?"🎉 ":""}{couponStatus.message}
+              </div>
+            )}
           </div>
           <div style={{display:"flex",gap:8,marginBottom:36,alignItems:"center"}}>
             <span style={{fontSize:13,color:BRAND.muted,marginRight:4}}>Billing:</span>
